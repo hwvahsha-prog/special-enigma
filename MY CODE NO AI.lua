@@ -1,113 +1,29 @@
-getgenv().SilentEnabled = false
-getgenv().SilentFOV = 250
-getgenv().BotSupport = false
-getgenv().SilentPrediction = 0.15038
-
+-- // Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
-
-
-local fovCircle = Drawing.new("Circle")
-fovCircle.Visible = false
-fovCircle.Radius = getgenv().SilentFOV
-fovCircle.Color = Color3.fromRGB(255, 255, 255)
-fovCircle.Thickness = 1.5
-fovCircle.Transparency = 0.6
-fovCircle.Filled = false
-
-local function getClosestInFOV()
-    local closest, closestPart = nil, nil
-    local shortestDist = math.huge
-    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-
-    -- Player Search
-    for _, v in pairs(Players:GetPlayers()) do
-        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
-            local root = v.Character.HumanoidRootPart
-            local sp, on = Camera:WorldToViewportPoint(root.Position)
-            if on then
-                local dist = (Vector2.new(sp.X, sp.Y) - center).Magnitude
-                if dist <= getgenv().SilentFOV and dist < shortestDist then
-                    closest = v
-                    closestPart = root
-                    shortestDist = dist
-                end
-            end
-        end
-    end
-
-    -- Bot Support Check
-    if getgenv().BotSupport then
-        for _, model in pairs(workspace:GetDescendants()) do
-            if model:IsA("Model") and model:FindFirstChild("Humanoid") and model:FindFirstChild("HumanoidRootPart") then
-                local isPlayer = false
-                for _, p in pairs(Players:GetPlayers()) do 
-                    if p.Character == model then 
-                        isPlayer = true 
-                    end 
-                end
-                
-                if not isPlayer then
-                    local root = model.HumanoidRootPart
-                    local sp, on = Camera:WorldToViewportPoint(root.Position)
-                    if on then
-                        local dist = (Vector2.new(sp.X, sp.Y) - center).Magnitude
-                        if dist <= getgenv().SilentFOV and dist < shortestDist then
-                            closest = model
-                            closestPart = root
-                            shortestDist = dist
-                        end
-                    end
-                end
-            end
-        end
-    end
-    return closest, closestPart
-end
---Run service
-RunService.RenderStepped:Connect(function()
-    if getgenv().SilentEnabled then
-        fovCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-        fovCircle.Radius = getgenv().SilentFOV
-        fovCircle.Visible = true
-    else
-        fovCircle.Visible = false
-    end
-end)
-
--- // Raycast Hook (The "Silent" part)
-local originalNamecall
-originalNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
-    local method = getnamecallmethod()
-    local args = { ... }
-
-    if not checkcaller() and self == workspace and method == "Raycast" and getgenv().SilentEnabled then
-        local _, sPart = getClosestInFOV()
-        if sPart then
-            local origin = args[2]
-            local targetPos = sPart.Position + (sPart.AssemblyLinearVelocity * getgenv().SilentPrediction)
-            
-            -- Redirection
-            args[3] = (targetPos - origin).Unit * ((targetPos - origin).Magnitude + 99999)
-            
-            return originalNamecall(self, unpack(args))
-        end
-    end
-    return originalNamecall(self, ...)
-end))
-
-local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
+local TweenService = game:GetService("TweenService")
+
+-- // LocalPlayer
+local LocalPlayer = Players.LocalPlayer or Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
 
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "XuosMainUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local ESP_Settings = {
+    Box = false,
+    Name = false,
+    Distance = false }
+
+local CamSettings = {
+    Enabled = false,
+    Smoothness = 0.1,
+    Prediction = 0.1,
+    AimPart = "Head"
+}
 
 local Colors = {
     Background = Color3.fromRGB(240, 248, 255),       
@@ -535,7 +451,6 @@ function Elements.AddButton(page, text, callback)
 
     ClickButton.MouseButton1Click:Connect(callback)
 end
-local SilentAimPage = CreatePage("Silent Aim")
 local ESPPage = CreatePage("ESP")
 local SpeedPage = CreatePage("Speed")
 local MiscPage = CreatePage("Teleport")
@@ -545,38 +460,108 @@ Elements.AddButton(SpeedPage, "Walkspeed/Jump Power UI", function()
     loadstring(game:HttpGet("https://raw.githubusercontent.com/hwvahsha-prog/e/refs/heads/main/abacktools-obfuscated.lua"))()
     print("Walkspeed Loaded:")
 end)
-Elements.AddToggle(SilentAimPage, "Silent Aim", false, nil, function(state)
-    getgenv().SilentEnabled = state
-    fovCircle.Visible = state -- Auto-show/hide FOV
-end)
-Elements.AddSlider(SilentAimPage, "FOV Radius", 0, 500, 250, function(value)
-    getgenv().SilentFOV = value
-    fovCircle.Radius = value
-end)
-Elements.AddToggle(SilentAimPage, "Bot Support", false, nil, function(state)
-    getgenv().BotSupport = state
-end)
-Elements.AddToggle(SilentAimPage, "Revolver Bypass", false, Enum.KeyCode.G, function(state)
-    print("Revolver Bypass is now:", state)
-end)
-Elements.AddToggle(SilentAimPage, "Wall Check", false, Enum.KeyCode.H, function(state)
-    print("Wall Check is now:", state)
-end)
-Elements.AddSlider(SilentAimPage, "FOV Radius", 0, 500, 263, function(value)
-    print("FOV Slider adjusted:", value)
-end)
-Elements.AddSlider(SilentAimPage, "Bullet Spread", 0, 100, 50, function(value)
-    print("Bullet Spread adjusted:", value)
-end)
-Elements.AddDropdown(SilentAimPage, "Aim Part", {"Head", "Left Arm", "Right Arm", "Closest Part"}, "Head", function(selected)
+
+Elements.AddDropdown(lockPage, "Aim Part", {"Head", "Left Arm", "Right Arm", "Closest Part"}, "Head", function(selected)
     print("Dropdown choice changed to:", selected)
 end)
-Elements.AddToggle(ESPPage, "Enable Box ESP", false, Enum.KeyCode.V, function(state)
-    print("ESP Box toggled:", state)
+
+Elements.AddToggle(lockPage, "Aimbot", false, Enum.KeyCode.V, function(state)
+    print("Aimbot:", state)
 end)
-Elements.AddSlider(SilentAimPage, "Prediction", 0, 500, 138, function(value)
-    -- Divide by 1000 to allow for values like 0.138 or 0.500
-    local calculatedPred = value / 1000
-    getgenv().SilentPrediction = calculatedPred
-    print("Prediction adjusted to:", calculatedPred)
+
+Elements.AddToggle(ESPPage, "Enable Box ESP", false, nil, function(state)
+    ESP_Settings.Box = state
+end)
+Elements.AddSlider(lockPage, "Smoothness", 1, 100, 10, function(val) CamSettings.Smoothness = val / 100 end)
+Elements.AddSlider(lockPage, "Prediction", 0, 50, 10, function(val) CamSettings.Prediction = val / 100 end)
+
+Elements.AddToggle(ESPPage, "Enable Name ESP", false, nil, function(state)
+    ESP_Settings.Name = state
+end)
+
+Elements.AddToggle(ESPPage, "Enable Distance ESP", false, nil, function(state)
+    ESP_Settings.Distance = state
+end)
+
+local function createESP(target)
+    if target == LocalPlayer then return end
+
+    -- Box ESP (Highlight)
+    local highlight = Instance.new("Highlight")
+    highlight.FillColor = Colors.AccentBlue -- Matches your light blue UI
+    highlight.FillTransparency = 0.5
+    highlight.Enabled = false
+    highlight.Parent = target.Character
+
+    -- Text ESP (Billboard)
+    local bb = Instance.new("BillboardGui", target.Character:WaitForChild("Head"))
+    bb.Size = UDim2.new(0, 100, 0, 50)
+    bb.StudsOffset = Vector3.new(0, 2, 0)
+    bb.AlwaysOnTop = true
+    bb.Enabled = false
+
+    local label = Instance.new("TextLabel", bb)
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = Colors.AccentBlue
+    label.Font = MainFont
+
+    RunService.RenderStepped:Connect(function()
+        if target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+            highlight.Enabled = ESP_Settings.Box
+            bb.Enabled = ESP_Settings.Name or ESP_Settings.Distance
+            if ESP_Settings.Name then label.Text = target.Name end
+            if ESP_Settings.Distance then 
+                local dist = math.floor((LocalPlayer.Character.HumanoidRootPart.Position - target.Character.HumanoidRootPart.Position).Magnitude)
+                label.Text = label.Text .. " [" .. dist .. "]" 
+            end
+        end
+    end)
+end
+for _, p in pairs(Players:GetPlayers()) do
+    if p ~= LocalPlayer then
+        if p.Character then createESP(p) end
+        p.CharacterAdded:Connect(function() createESP(p) end)
+    end
+end
+local function getClosestPlayer()
+    local closest, dist = nil, math.huge
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            -- GOOD Knocked Check (Check for common K.O values)
+            local isKnocked = (p.Character:FindFirstChild("BodyEffects") and p.Character.BodyEffects:FindFirstChild("K.O"))
+            if not (isKnocked and isKnocked.Value) then
+                local pos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(p.Character.HumanoidRootPart.Position)
+                if onScreen then
+                    local mag = (Vector2.new(pos.X, pos.Y) - UserInputService:GetMouseLocation()).Magnitude
+                    if mag < dist then
+                        dist = mag
+                        closest = p
+                    end
+                end
+            end
+        end
+    end
+    return closest
+end
+
+RunService.RenderStepped:Connect(function()
+    if CamSettings.Enabled then
+        local target = getClosestPlayer()
+        if target and target.Character then
+            local part = target.Character:FindFirstChild(CamSettings.AimPart) or target.Character.HumanoidRootPart
+            
+            -- GOOD Wall Check
+            local rayParams = RaycastParams.new()
+            rayParams.FilterDescendantsInstances = {LocalPlayer.Character, target.Character}
+            rayParams.FilterType = Enum.RaycastFilterType.Exclude
+            local ray = workspace:Raycast(workspace.CurrentCamera.CFrame.Position, (part.Position - workspace.CurrentCamera.CFrame.Position), rayParams)
+            
+            if not ray then -- No wall in the way
+                local targetPos = part.Position + (target.Character.HumanoidRootPart.AssemblyLinearVelocity * CamSettings.Prediction)
+                local lookAt = CFrame.new(workspace.CurrentCamera.CFrame.Position, targetPos)
+                workspace.CurrentCamera.CFrame = workspace.CurrentCamera.CFrame:Lerp(lookAt, CamSettings.Smoothness)
+            end
+        end
+    end
 end)
