@@ -24,6 +24,10 @@ local CamSettings = {
     Prediction = 0.1,
     AimPart = "Head"
 }
+local LockSettings = {
+    Enabled = false,
+    AimPart = "Head"
+}
 
 local Colors = {
     Background = Color3.fromRGB(240, 248, 255),       
@@ -461,12 +465,14 @@ Elements.AddButton(SpeedPage, "Walkspeed/Jump Power UI", function()
     print("Walkspeed Loaded:")
 end)
 
-Elements.AddDropdown(lockPage, "Aim Part", {"Head", "Left Arm", "Right Arm", "Closest Part"}, "Head", function(selected)
-    print("Dropdown choice changed to:", selected)
+Elements.AddDropdown(lockPage, "Aim Part", {"Head", "HumanoidRootPart"}, "Head", function(selected)
+    LockSettings.AimPart = selected
 end)
 
+
 Elements.AddToggle(lockPage, "Aimbot", false, Enum.KeyCode.V, function(state)
-    print("Aimbot:", state)
+    LockSettings.Enabled = state -- This connects the UI to your loop
+    print("Aimbot is now:", state)
 end)
 
 Elements.AddToggle(ESPPage, "Enable Box ESP", false, nil, function(state)
@@ -524,13 +530,18 @@ for _, p in pairs(Players:GetPlayers()) do
         p.CharacterAdded:Connect(function() createESP(p) end)
     end
 end
+-- 1. Helper function defined outside
+local function isKnocked(character)
+    local effect = character:FindFirstChild("BodyEffects") and character.BodyEffects:FindFirstChild("K.O")
+    return effect and effect.Value == true
+end
+
+-- 2. Targeting function
 local function getClosestPlayer()
     local closest, dist = nil, math.huge
     for _, p in pairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-            -- GOOD Knocked Check (Check for common K.O values)
-            local isKnocked = (p.Character:FindFirstChild("BodyEffects") and p.Character.BodyEffects:FindFirstChild("K.O"))
-            if not (isKnocked and isKnocked.Value) then
+            if not isKnocked(p.Character) then
                 local pos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(p.Character.HumanoidRootPart.Position)
                 if onScreen then
                     local mag = (Vector2.new(pos.X, pos.Y) - UserInputService:GetMouseLocation()).Magnitude
@@ -545,22 +556,22 @@ local function getClosestPlayer()
     return closest
 end
 
+
 RunService.RenderStepped:Connect(function()
-    if CamSettings.Enabled then
+    if LockSettings.Enabled then
         local target = getClosestPlayer()
         if target and target.Character then
-            local part = target.Character:FindFirstChild(CamSettings.AimPart) or target.Character.HumanoidRootPart
+            local part = target.Character:FindFirstChild(LockSettings.AimPart) or target.Character.HumanoidRootPart
             
-            -- GOOD Wall Check
             local rayParams = RaycastParams.new()
             rayParams.FilterDescendantsInstances = {LocalPlayer.Character, target.Character}
             rayParams.FilterType = Enum.RaycastFilterType.Exclude
             local ray = workspace:Raycast(workspace.CurrentCamera.CFrame.Position, (part.Position - workspace.CurrentCamera.CFrame.Position), rayParams)
             
-            if not ray then -- No wall in the way
+            if not ray then 
                 local targetPos = part.Position + (target.Character.HumanoidRootPart.AssemblyLinearVelocity * CamSettings.Prediction)
-                local lookAt = CFrame.new(workspace.CurrentCamera.CFrame.Position, targetPos)
-                workspace.CurrentCamera.CFrame = workspace.CurrentCamera.CFrame:Lerp(lookAt, CamSettings.Smoothness)
+                local targetCFrame = CFrame.new(workspace.CurrentCamera.CFrame.Position, targetPos)
+                workspace.CurrentCamera.CFrame = workspace.CurrentCamera.CFrame:Lerp(targetCFrame, CamSettings.Smoothness)
             end
         end
     end
