@@ -556,10 +556,18 @@ local function getClosestPlayer()
     return closest
 end
 
+-- // Add this outside your loop to track the current target
+local currentTarget = nil
 
 RunService.RenderStepped:Connect(function()
     if LockSettings.Enabled then
-        local target = getClosestPlayer()
+        -- 1. Check if our current target is still valid
+        if not (currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild("HumanoidRootPart") and not isKnocked(currentTarget.Character)) then
+            currentTarget = getClosestPlayer() -- Only search if we don't have a valid one
+        end
+
+        local target = currentTarget
+        
         if target and target.Character then
             local part = target.Character:FindFirstChild(LockSettings.AimPart) or target.Character.HumanoidRootPart
             
@@ -572,7 +580,11 @@ RunService.RenderStepped:Connect(function()
                 local targetPos = part.Position + (target.Character.HumanoidRootPart.AssemblyLinearVelocity * CamSettings.Prediction)
                 local targetCFrame = CFrame.new(workspace.CurrentCamera.CFrame.Position, targetPos)
                 workspace.CurrentCamera.CFrame = workspace.CurrentCamera.CFrame:Lerp(targetCFrame, CamSettings.Smoothness)
+            else
+                currentTarget = nil 
             end
         end
+    else
+        currentTarget = nil
     end
 end)
