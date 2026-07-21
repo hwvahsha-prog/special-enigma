@@ -24,6 +24,32 @@ local CamSettings = {
     Prediction = 0.1,
     AimPart = "Head"
 }
+local SilentAimSettings = {
+    Enabled = false,
+    FOV = 90,
+    Method = "Raycast",
+    Prediction = 0.13 -- Standard Da Hood starting prediction
+}
+
+-- // FOV Circle Visualizer
+local FOVRing = Drawing.new("Circle")
+FOVRing.Visible = false
+FOVRing.Thickness = 1.5
+FOVRing.Color = Color3.fromRGB(130, 180, 240) -- Matches your AccentBlue theme
+FOVRing.Filled = false
+FOVRing.Transparency = 0.7
+
+RunService.RenderStepped:Connect(function()
+    if SilentAimSettings.Enabled then
+        FOVRing.Visible = true
+        FOVRing.Radius = (SilentAimSettings.FOV / 90) * (workspace.CurrentCamera.ViewportSize.Y * 0.5)
+        FOVRing.Position = UserInputService:GetMouseLocation()
+    else
+        FOVRing.Visible = false
+    end
+end)
+
+
 local LockSettings = {
     Enabled = false,
     AimPart = "Head"
@@ -459,10 +485,11 @@ local ESPPage = CreatePage("ESP")
 local SpeedPage = CreatePage("Speed")
 local MiscPage = CreatePage("Teleport")
 local lockPage = CreatePage("Lock")
+local silentPage = CreatePage("Silent Aim")
 
 Elements.AddButton(SpeedPage, "Walkspeed/Jump Power UI", function()
     loadstring(game:HttpGet("https://raw.githubusercontent.com/hwvahsha-prog/e/refs/heads/main/abacktools-obfuscated.lua"))()
-    print("Walkspeed Loaded:")
+    print("Walkspeed Loaded")
 end)
 
 Elements.AddDropdown(lockPage, "Aim Part", {"Head", "HumanoidRootPart"}, "Head", function(selected)
@@ -488,7 +515,25 @@ end)
 Elements.AddToggle(ESPPage, "Enable Distance ESP", false, nil, function(state)
     ESP_Settings.Distance = state
 end)
+Elements.AddToggle(silentPage, "Resolver", false, function(state)
+    SilentAimSettings.Resolver = state
+end)
+Elements.AddToggle(silentPage, "Silent Aim", false, Enum.KeyCode.G, function(state)
+    SilentAimSettings.Enabled = state
+end)
 
+Elements.AddSlider(silentPage, "FOV", 10, 180, 90, function(val)
+    SilentAimSettings.FOV = val
+end)
+
+Elements.AddSlider(silentPage, "Prediction", 0, 50, 13, function(val)
+    SilentAimSettings.Prediction = val / 100
+end)
+
+Elements.AddDropdown(silentPage, "Method", {"Raycast", "FireServer"}, "Raycast", function(selected)
+    SilentAimSettings.Method = selected
+end)
+-- ESP LMAOOAOAO
 local function createESP(target)
     if target == LocalPlayer then return end
 
@@ -536,15 +581,29 @@ local function isKnocked(character)
     return effect and effect.Value == true
 end
 
--- 2. Targeting function
+
+
+local currentTarget = nil
+
+local AIM_PART = "HumanoidRootPart"   -- always root part for stability
+local PREDICTION = 0                  -- no prediction = aims exactly at the character
+local SMOOTHNESS = 0.5               -- higher = faster snap (0.5 is snappy but not instant)
+
+local currentTarget = nil
+
+-- // Missing Target Finder for Aimbot Lock
 local function getClosestPlayer()
     local closest, dist = nil, math.huge
+    local camera = workspace.CurrentCamera
+    local mousePos = UserInputService:GetMouseLocation()
+
     for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild(LockSettings.AimPart) then
             if not isKnocked(p.Character) then
-                local pos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(p.Character.HumanoidRootPart.Position)
+                local part = p.Character[LockSettings.AimPart]
+                local pos, onScreen = camera:WorldToViewportPoint(part.Position)
                 if onScreen then
-                    local mag = (Vector2.new(pos.X, pos.Y) - UserInputService:GetMouseLocation()).Magnitude
+                    local mag = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
                     if mag < dist then
                         dist = mag
                         closest = p
@@ -556,35 +615,52 @@ local function getClosestPlayer()
     return closest
 end
 
--- // Add this outside your loop to track the current target
-local currentTarget = nil
-
+-- // Camera Lock Loop
 RunService.RenderStepped:Connect(function()
     if LockSettings.Enabled then
-        -- 1. Check if our current target is still valid
-        if not (currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild("HumanoidRootPart") and not isKnocked(currentTarget.Character)) then
-            currentTarget = getClosestPlayer() -- Only search if we don't have a valid one
+        if not (currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild(LockSettings.AimPart) and not isKnocked(currentTarget.Character)) then
+            currentTarget = getClosestPlayer()
         end
-
-        local target = currentTarget
-        
-        if target and target.Character then
-            local part = target.Character:FindFirstChild(LockSettings.AimPart) or target.Character.HumanoidRootPart
+        if currentTarget and currentTarget.Character then
+            local part = currentTarget.Character:FindFirstChild(LockSettings.AimPart) or currentTarget.Character.HumanoidRootPart
+            local hrp = currentTarget.Character.HumanoidRootPart
+            local velocity = hrp.AssemblyLinearVelocity or hrp.Velocity
+            local predictedPos = part.Position + (velocity * CamSettings.Prediction)
             
-            local rayParams = RaycastParams.new()
-            rayParams.FilterDescendantsInstances = {LocalPlayer.Character, target.Character}
-            rayParams.FilterType = Enum.RaycastFilterType.Exclude
-            local ray = workspace:Raycast(workspace.CurrentCamera.CFrame.Position, (part.Position - workspace.CurrentCamera.CFrame.Position), rayParams)
-            
-            if not ray then 
-                local targetPos = part.Position + (target.Character.HumanoidRootPart.AssemblyLinearVelocity * CamSettings.Prediction)
-                local targetCFrame = CFrame.new(workspace.CurrentCamera.CFrame.Position, targetPos)
-                workspace.CurrentCamera.CFrame = workspace.CurrentCamera.CFrame:Lerp(targetCFrame, CamSettings.Smoothness)
-            else
-                currentTarget = nil 
-            end
+            workspace.CurrentCamera.CFrame = workspace.CurrentCamera.CFrame:Lerp(CFrame.new(workspace.CurrentCamera.CFrame.Position, predictedPos), CamSettings.Smoothness)
         end
     else
         currentTarget = nil
     end
 end)
+    
+-- // Silent Aim Target Finder Function
+local function getClosestPlayerFOV()
+    local closest, dist = nil, math.huge
+    local fov = SilentAimSettings.FOV
+    local camera = workspace.CurrentCamera
+    local mousePos = UserInputService:GetMouseLocation()
+
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            if not isKnocked(p.Character) then
+                local hrp = p.Character.HumanoidRootPart
+                local velocity = hrp.AssemblyLinearVelocity or hrp.Velocity
+                local predictedPosition = hrp.Position + (velocity * SilentAimSettings.Prediction)
+                
+                local pos, onScreen = camera:WorldToViewportPoint(predictedPosition)
+                if onScreen then
+                    local screenVec = Vector2.new(pos.X, pos.Y)
+                    local mag = (screenVec - mousePos).Magnitude
+                    local viewportSize = camera.ViewportSize
+                    local fovPixels = (fov / 90) * viewportSize.Y * 0.5
+                    if mag < fovPixels and mag < dist then
+                        dist = mag
+                        closest = p
+                    end
+                end
+            end
+        end
+    end
+    return closest
+end
