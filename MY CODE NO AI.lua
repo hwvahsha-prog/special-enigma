@@ -28,7 +28,8 @@ local SilentAimSettings = {
     Enabled = false,
     FOV = 90,
     Method = "Raycast",
-    Prediction = 0.13 -- Standard Da Hood starting prediction
+    Prediction = 0.13,
+    Resolver = false  -- Add this line
 }
 
 -- // FOV Circle Visualizer
@@ -492,11 +493,10 @@ Elements.AddButton(SpeedPage, "Walkspeed/Jump Power UI", function()
     print("Walkspeed Loaded")
 end)
 
-Elements.AddDropdown(lockPage, "Aim Part", {"Head", "HumanoidRootPart"}, "Head", function(selected)
+-- Fix dropdown default
+Elements.AddDropdown(lockPage, "Aim Part", {"Head", "HumanoidRootPart"}, "HumanoidRootPart", function(selected)
     LockSettings.AimPart = selected
 end)
-
-
 Elements.AddToggle(lockPage, "Aimbot", false, Enum.KeyCode.V, function(state)
     LockSettings.Enabled = state -- This connects the UI to your loop
     print("Aimbot is now:", state)
@@ -505,7 +505,9 @@ end)
 Elements.AddToggle(ESPPage, "Enable Box ESP", false, nil, function(state)
     ESP_Settings.Box = state
 end)
+
 Elements.AddSlider(lockPage, "Smoothness", 1, 100, 10, function(val) CamSettings.Smoothness = val / 100 end)
+
 Elements.AddSlider(lockPage, "Prediction", 0, 50, 10, function(val) CamSettings.Prediction = val / 100 end)
 
 Elements.AddToggle(ESPPage, "Enable Name ESP", false, nil, function(state)
@@ -529,8 +531,7 @@ end)
 Elements.AddSlider(silentPage, "Prediction", 0, 50, 13, function(val)
     SilentAimSettings.Prediction = val / 100
 end)
-
-Elements.AddDropdown(silentPage, "Method", {"Raycast", "FireServer"}, "Raycast", function(selected)
+Elements.AddDropdown(silentPage, "Method", {"FireServer", "RemoteEvent", "Mouse"}, "FireServer", function(selected)
     SilentAimSettings.Method = selected
 end)
 -- ESP LMAOOAOAO
@@ -586,8 +587,6 @@ end
 local currentTarget = nil
 
 local AIM_PART = "HumanoidRootPart"   -- always root part for stability
-local PREDICTION = 0                  -- no prediction = aims exactly at the character
-local SMOOTHNESS = 0.5               -- higher = faster snap (0.5 is snappy but not instant)
 
 local currentTarget = nil
 
@@ -596,17 +595,19 @@ local function getClosestPlayer()
     local closest, dist = nil, math.huge
     local camera = workspace.CurrentCamera
     local mousePos = UserInputService:GetMouseLocation()
-
+    
     for _, p in pairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild(LockSettings.AimPart) then
             if not isKnocked(p.Character) then
-                local part = p.Character[LockSettings.AimPart]
-                local pos, onScreen = camera:WorldToViewportPoint(part.Position)
-                if onScreen then
-                    local mag = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
-                    if mag < dist then
-                        dist = mag
-                        closest = p
+                local part = p.Character[LockSettings.AimPart] -- Fixed: using LockSettings
+                if part then
+                    local pos, onScreen = camera:WorldToViewportPoint(part.Position)
+                    if onScreen then
+                        local mag = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+                        if mag < dist then
+                            dist = mag
+                            closest = p
+                        end
                     end
                 end
             end
@@ -664,3 +665,121 @@ local function getClosestPlayerFOV()
     end
     return closest
 end
+
+-- Silent Aim Fire function for Da Hood/Da Strike/Des Hood
+local function silentAimFire()
+    if not SilentAimSettings.Enabled then return end
+    
+    local target = getClosestPlayerFOV()
+    if not target then return end
+    
+    local hrp = target.Character.HumanoidRootPart
+    local velocity = hrp.AssemblyLinearVelocity or hrp.Velocity
+    local predictedPos = hrp.Position + (velocity * SilentAimSettings.Prediction)
+    
+    -- Get the current tool (gun)
+    local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
+    if not tool then return end
+    
+    -- Find the remote (method 1: RemoteEvent)
+    local remote = tool:FindFirstChild("RemoteEvent") or tool:FindFirstChild("FireRemote")
+    
+    -- If not found, try finding remote in the tool's parent or workspace
+    if not remote then
+        remote = tool.Parent:FindFirstChild("RemoteEvent") or workspace:FindFirstChild("RemoteEvent")
+    end
+    
+    -- Fire the remote with modified position
+    if remote and remote:IsA("RemoteEvent") then
+        -- Da Hood usually fires with: (Player, Position, etc)
+        pcall(function()
+            remote:FireServer(predictedPos)
+            -- Or sometimes it's: remote:FireServer(target, predictedPos)
+        end)
+    end
+    
+    -- If no remote found, try mouse input method (Method 2)
+    if not remote then
+        -- Some versions use mouse hit
+        local mouse = LocalPlayer:GetMouse()
+        if mouse then
+            -- Modify mouse.Hit to point at target
+            local origin = workspace.CurrentCamera.CFrame.Position
+            local direction = (predictedPos - origin).Unit
+            local ray = Ray.new(origin, direction * 1000)
+            local hit, pos = workspace:FindPartOnRay(ray, LocalPlayer.Character)
+            
+            -- Some tools use this
+            if tool:FindFirstChild("Handle") then
+                local handle = tool.Handle
+                if handle:FindFirstChild("Fire") then
+                    handle.Fire:FireServer(pos or predictedPos)
+                end
+            end
+        end
+    end
+end
+
+-- Hook into shooting (Method 1: Mouse click)
+UserInputService.InputBegan:Connect(function(input, processed)
+    if processed then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        silentAimFire()
+    end
+end)
+
+-- Hook into shooting (Method 2: Tool activation)
+-- Some games use tool activation instead of mouse click
+LocalPlayer.CharacterAdded:Connect(function(char)
+    char.ChildAdded:Connect(function(child)
+        if child:IsA("Tool") then
+            -- Hook into tool activation
+            child.Activated:Connect(function()
+                silentAimFire()
+            end)
+        end
+    end)
+end)
+
+-- Hook into shooting (Method 3: Remote detection)
+-- For games that use remotes directly
+local function hookRemote(remote)
+    if remote:IsA("RemoteEvent") then
+        local oldFire = remote.FireServer
+        remote.FireServer = function(self, ...)
+            local args = {...}
+            -- Check if the remote is a gun remote
+            if string.find(remote.Name, "Fire") or string.find(remote.Name, "Shoot") or string.find(remote.Name, "Gun") then
+                local target = getClosestPlayerFOV()
+                if target and SilentAimSettings.Enabled then
+                    local hrp = target.Character.HumanoidRootPart
+                    local velocity = hrp.AssemblyLinearVelocity or hrp.Velocity
+                    local predictedPos = hrp.Position + (velocity * SilentAimSettings.Prediction)
+                    -- Replace position argument
+                    if type(args[1]) == "Vector3" then
+                        args[1] = predictedPos
+                    elseif type(args[2]) == "Vector3" then
+                        args[2] = predictedPos
+                    end
+                end
+            end
+            return oldFire(self, unpack(args))
+        end
+    end
+end
+
+-- Hook all remotes
+for _, remote in pairs(workspace:GetDescendants()) do
+    if remote:IsA("RemoteEvent") and not remote:GetAttribute("Hooked") then
+        remote:SetAttribute("Hooked", true)
+        hookRemote(remote)
+    end
+end
+
+-- Also check new remotes
+workspace.DescendantAdded:Connect(function(child)
+    if child:IsA("RemoteEvent") and not child:GetAttribute("Hooked") then
+        child:SetAttribute("Hooked", true)
+        hookRemote(child)
+    end
+end)
