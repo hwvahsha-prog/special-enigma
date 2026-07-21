@@ -191,7 +191,6 @@ end)
 
 local Pages = {}
 local FirstPage = nil
-
 local function CreatePage(name)
     local Page = Instance.new("ScrollingFrame")
     Page.Name = name .. "Page"
@@ -199,7 +198,7 @@ local function CreatePage(name)
     Page.BackgroundTransparency = 1
     Page.CanvasSize = UDim2.new(0, 0, 0, 0)
     Page.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    Page.ScrollBarThickness = 2
+    Page.ScrollBarThickness = 6
     Page.ScrollBarImageColor3 = Colors.AccentBlue
     Page.Visible = false
     Page.Parent = PageContainer
@@ -262,6 +261,7 @@ local function CreatePage(name)
 
     return Page
 end
+
 
 local Elements = {}
 
@@ -534,48 +534,87 @@ end)
 Elements.AddDropdown(silentPage, "Method", {"FireServer", "RemoteEvent", "Mouse"}, "FireServer", function(selected)
     SilentAimSettings.Method = selected
 end)
--- ESP LMAOOAOAO
+
 local function createESP(target)
     if target == LocalPlayer then return end
-
+    
+    -- Wait for character to load properly
+    local character = target.Character
+    if not character then return end
+    
+    local head = character:WaitForChild("Head", 5)
+    if not head then return end
+    
     -- Box ESP (Highlight)
     local highlight = Instance.new("Highlight")
-    highlight.FillColor = Colors.AccentBlue -- Matches your light blue UI
+    highlight.FillColor = Colors.AccentBlue
     highlight.FillTransparency = 0.5
     highlight.Enabled = false
-    highlight.Parent = target.Character
-
+    highlight.Parent = character
+    
     -- Text ESP (Billboard)
-    local bb = Instance.new("BillboardGui", target.Character:WaitForChild("Head"))
+    local bb = Instance.new("BillboardGui")
     bb.Size = UDim2.new(0, 100, 0, 50)
     bb.StudsOffset = Vector3.new(0, 2, 0)
     bb.AlwaysOnTop = true
     bb.Enabled = false
-
-    local label = Instance.new("TextLabel", bb)
+    bb.Parent = head
+    
+    local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, 0, 1, 0)
     label.BackgroundTransparency = 1
     label.TextColor3 = Colors.AccentBlue
     label.Font = MainFont
-
-    RunService.RenderStepped:Connect(function()
-        if target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-            highlight.Enabled = ESP_Settings.Box
-            bb.Enabled = ESP_Settings.Name or ESP_Settings.Distance
-            if ESP_Settings.Name then label.Text = target.Name end
-            if ESP_Settings.Distance then 
-                local dist = math.floor((LocalPlayer.Character.HumanoidRootPart.Position - target.Character.HumanoidRootPart.Position).Magnitude)
-                label.Text = label.Text .. " [" .. dist .. "]" 
-            end
+    label.TextScaled = true
+    label.Parent = bb
+    
+    -- Store ESP objects for cleanup
+    target._esp = {highlight = highlight, bb = bb, label = label}
+    
+    -- Update loop
+    local conn
+    conn = RunService.RenderStepped:Connect(function()
+        task.wait()
+        if not target.Character or not target.Character:FindFirstChild("HumanoidRootPart") then
+            conn:Disconnect()
+            return
         end
+        
+        highlight.Enabled = ESP_Settings.Box
+        bb.Enabled = ESP_Settings.Name or ESP_Settings.Distance
+        
+        local text = ""
+        if ESP_Settings.Name then text = target.Name end
+        if ESP_Settings.Distance then 
+            local dist = math.floor((LocalPlayer.Character.HumanoidRootPart.Position - target.Character.HumanoidRootPart.Position).Magnitude)
+            text = text .. (text ~= "" and " [" or "") .. dist .. (text ~= "" and "]" or "")
+        end
+        label.Text = text
     end)
 end
+
+-- Fix player connections
 for _, p in pairs(Players:GetPlayers()) do
     if p ~= LocalPlayer then
-        if p.Character then createESP(p) end
-        p.CharacterAdded:Connect(function() createESP(p) end)
+        p.CharacterAdded:Connect(function(char)
+            task.wait(0.5) -- Wait for character to fully load
+            createESP(p)
+        end)
+        if p.Character then
+            createESP(p)
+        end
     end
 end
+
+-- Also handle new players
+Players.PlayerAdded:Connect(function(p)
+    if p ~= LocalPlayer then
+        p.CharacterAdded:Connect(function(char)
+            task.wait(0.5)
+            createESP(p)
+        end)
+    end
+end)
 -- 1. Helper function defined outside
 local function isKnocked(character)
     local effect = character:FindFirstChild("BodyEffects") and character.BodyEffects:FindFirstChild("K.O")
@@ -586,28 +625,23 @@ end
 
 local currentTarget = nil
 
-local AIM_PART = "HumanoidRootPart"   -- always root part for stability
-
-local currentTarget = nil
-
--- // Missing Target Finder for Aimbot Lock
+-- Fix getClosestPlayer
 local function getClosestPlayer()
     local closest, dist = nil, math.huge
     local camera = workspace.CurrentCamera
-    local mousePos = UserInputService:GetMouseLocation()
+    local viewportSize = workspace.CurrentCamera.ViewportSize
+local centerPos = Vector2.new(viewportSize.X / 2, viewportSize.Y / 2)
     
     for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild(LockSettings.AimPart) then
-            if not isKnocked(p.Character) then
-                local part = p.Character[LockSettings.AimPart] -- Fixed: using LockSettings
-                if part then
-                    local pos, onScreen = camera:WorldToViewportPoint(part.Position)
-                    if onScreen then
-                        local mag = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
-                        if mag < dist then
-                            dist = mag
-                            closest = p
-                        end
+        if p ~= LocalPlayer and p.Character then
+            local part = p.Character:FindFirstChild(LockSettings.AimPart) or p.Character:FindFirstChild("HumanoidRootPart")
+            if part and not isKnocked(p.Character) then
+                local pos, onScreen = camera:WorldToViewportPoint(part.Position)
+                if onScreen then
+                    local mag = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+                    if mag < dist then
+                        dist = mag
+                        closest = p
                     end
                 end
             end
@@ -666,7 +700,7 @@ local function getClosestPlayerFOV()
     return closest
 end
 
--- Silent Aim Fire function for Da Hood/Da Strike/Des Hood
+-- SIMPLIFIED SILENT AIM - Remove the complex remote hooks
 local function silentAimFire()
     if not SilentAimSettings.Enabled then return end
     
@@ -677,109 +711,59 @@ local function silentAimFire()
     local velocity = hrp.AssemblyLinearVelocity or hrp.Velocity
     local predictedPos = hrp.Position + (velocity * SilentAimSettings.Prediction)
     
-    -- Get the current tool (gun)
+    -- For Da Hood, try different methods
     local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
     if not tool then return end
     
-    -- Find the remote (method 1: RemoteEvent)
-    local remote = tool:FindFirstChild("RemoteEvent") or tool:FindFirstChild("FireRemote")
-    
-    -- If not found, try finding remote in the tool's parent or workspace
-    if not remote then
-        remote = tool.Parent:FindFirstChild("RemoteEvent") or workspace:FindFirstChild("RemoteEvent")
-    end
-    
-    -- Fire the remote with modified position
+    -- Method 1: Try RemoteEvent
+    local remote = tool:FindFirstChild("RemoteEvent") 
     if remote and remote:IsA("RemoteEvent") then
-        -- Da Hood usually fires with: (Player, Position, etc)
         pcall(function()
             remote:FireServer(predictedPos)
-            -- Or sometimes it's: remote:FireServer(target, predictedPos)
         end)
+        return
     end
     
-    -- If no remote found, try mouse input method (Method 2)
-    if not remote then
-        -- Some versions use mouse hit
-        local mouse = LocalPlayer:GetMouse()
-        if mouse then
-            -- Modify mouse.Hit to point at target
-            local origin = workspace.CurrentCamera.CFrame.Position
-            local direction = (predictedPos - origin).Unit
-            local ray = Ray.new(origin, direction * 1000)
-            local hit, pos = workspace:FindPartOnRay(ray, LocalPlayer.Character)
-            
+    -- Method 2: Try FireServer directly on tool
+    if tool:FindFirstChild("FireServer") then
+        pcall(function()
+            tool.FireServer:FireServer(predictedPos)
+        end)
+        return
+    end
+    
+    -- Method 3: Try mouse manipulation (simple approach)
+    local mouse = LocalPlayer:GetMouse()
+    if mouse then
+        -- This won't work perfectly but better than nothing
+        local origin = workspace.CurrentCamera.CFrame.Position
+        local direction = (predictedPos - origin).Unit
+        local ray = Ray.new(origin, direction * 1000)
+        local hit, pos = workspace:FindPartOnRay(ray, LocalPlayer.Character)
+        if hit then
             -- Some tools use this
-            if tool:FindFirstChild("Handle") then
-                local handle = tool.Handle
-                if handle:FindFirstChild("Fire") then
-                    handle.Fire:FireServer(pos or predictedPos)
-                end
+            if tool:FindFirstChild("Handle") and tool.Handle:FindFirstChild("Fire") then
+                pcall(function()
+                    tool.Handle.Fire:FireServer(pos)
+                end)
             end
         end
     end
 end
-
--- Hook into shooting (Method 1: Mouse click)
+-- Add this after the silentAimFire function
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         silentAimFire()
     end
 end)
-
--- Hook into shooting (Method 2: Tool activation)
--- Some games use tool activation instead of mouse click
+-- Hook into tool activation
 LocalPlayer.CharacterAdded:Connect(function(char)
     char.ChildAdded:Connect(function(child)
         if child:IsA("Tool") then
-            -- Hook into tool activation
             child.Activated:Connect(function()
                 silentAimFire()
             end)
         end
     end)
-end)
-
--- Hook into shooting (Method 3: Remote detection)
--- For games that use remotes directly
-local function hookRemote(remote)
-    if remote:IsA("RemoteEvent") then
-        local oldFire = remote.FireServer
-        remote.FireServer = function(self, ...)
-            local args = {...}
-            -- Check if the remote is a gun remote
-            if string.find(remote.Name, "Fire") or string.find(remote.Name, "Shoot") or string.find(remote.Name, "Gun") then
-                local target = getClosestPlayerFOV()
-                if target and SilentAimSettings.Enabled then
-                    local hrp = target.Character.HumanoidRootPart
-                    local velocity = hrp.AssemblyLinearVelocity or hrp.Velocity
-                    local predictedPos = hrp.Position + (velocity * SilentAimSettings.Prediction)
-                    -- Replace position argument
-                    if type(args[1]) == "Vector3" then
-                        args[1] = predictedPos
-                    elseif type(args[2]) == "Vector3" then
-                        args[2] = predictedPos
-                    end
-                end
-            end
-            return oldFire(self, unpack(args))
-        end
-    end
-end
-
--- Hook all remotes
-for _, remote in pairs(workspace:GetDescendants()) do
-    if remote:IsA("RemoteEvent") and not remote:GetAttribute("Hooked") then
-        remote:SetAttribute("Hooked", true)
-        hookRemote(remote)
-    end
-end
-
--- Also check new remotes
-workspace.DescendantAdded:Connect(function(child)
-    if child:IsA("RemoteEvent") and not child:GetAttribute("Hooked") then
-        child:SetAttribute("Hooked", true)
-        hookRemote(child)
-    end
 end)
