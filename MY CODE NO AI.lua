@@ -9,32 +9,23 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local Camera = workspace.CurrentCamera
 local player = Players.LocalPlayer
 
-local Esp = loadstring(game:HttpGet("https://raw.githubusercontent.com/haalfiperth/Elisium/refs/heads/main/Deps/Esp.lua"))()
--- ESP Default Values (must be after Esp is loaded AND after Sections is created)
-if not Esp.Tracers then
-    Esp.Tracers = {Enabled = false, Color = NewRGB(255,255,255), Origin = "Bottom", Thickness = 1}
-end
-if not Esp.Skeleton then
-    Esp.Skeleton = {Enabled = false, Color = NewRGB(255,255,255), Thickness = 1}
-end
-if not Esp.HeadDot then
-    Esp.HeadDot = {Enabled = false, Color = NewRGB(255,0,0), Size = 5}
-end
-if not Esp.Footsteps then
-    Esp.Footsteps = {Enabled = false, Color = NewRGB(255,255,0), Lifetime = 3}
-end
-if not Esp.Arrow then
-    Esp.Arrow = {Enabled = false, Color = NewRGB(255,0,0), Size = 20, Distance = 50}
-end
-if not Esp.PlayerCount then
-    Esp.PlayerCount = {Enabled = false, Color = NewRGB(255,255,255), ShowAlive = true, ShowTotal = true, TextSize = 14}
-end
-if not Esp.Radar then
-    Esp.Radar = {Enabled = false, Size = 150, Range = 200, Background = NewRGB(10,10,10), Enemy = NewRGB(255,0,0), Team = NewRGB(0,255,0)}
-end
-if not Esp.StatusIcons then
-    Esp.StatusIcons = {Enabled = false, Knocked = true, Grabbed = true, Reloading = true}
-end
+-- Simple Esp module (replaces broken loadstring)
+local Esp = {
+    Box = {Enabled = false, Color = NewRGB(255,255,255)},
+    Tracers = {Enabled = false, Color = NewRGB(255,255,255), Origin = "Bottom", Thickness = 1},
+    Skeleton = {Enabled = false, Color = NewRGB(255,255,255), Thickness = 1},
+    HeadDot = {Enabled = false, Color = NewRGB(255,0,0), Size = 5},
+    Footsteps = {Enabled = false, Color = NewRGB(255,255,0), Lifetime = 3},
+    Arrow = {Enabled = false, Color = NewRGB(255,0,0), Size = 20, Distance = 50},
+    PlayerCount = {Enabled = false, Color = NewRGB(255,255,255), ShowAlive = true, ShowTotal = true, TextSize = 14},
+    Radar = {Enabled = false, Size = 150, Range = 200, Background = NewRGB(10,10,10), Enemy = NewRGB(255,0,0), Team = NewRGB(0,255,0)},
+    StatusIcons = {Enabled = false, Knocked = true, Grabbed = true, Reloading = true},
+    Text = {Name = {Enabled = false, Color = NewRGB(255,255,255), Type = "DisplayName", Casing = "Normal"}},
+    Bars = {Health = {Enabled = false, Color1 = NewRGB(0,255,0), Color2 = NewRGB(255,255,0), Color3 = NewRGB(255,0,0)}, Armor = {Enabled = false}, Type = "Gradient", Width = 1, Lerp = 0.05, Resize = false},
+    Material = {Enabled = false, Color = NewRGB(255,255,255), Material = Enum.Material.ForceField},
+    Highlight = {Enabled = false, Color = NewRGB(255,255,255), Outline = NewRGB(255,255,255), BehindWalls = false},
+    Chams = {Enabled = false, Color = NewRGB(255,255,255), BehindWalls = false}
+}
 -- UI parent (fallback for some games)
 local guiParent = player:WaitForChild("PlayerGui")
 pcall(function() guiParent = CoreGui end)
