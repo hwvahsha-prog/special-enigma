@@ -1,4 +1,16 @@
--- Add these default values for the new ESP options
+
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local MarketplaceService = game:GetService("MarketplaceService")
+local Camera = workspace.CurrentCamera
+local player = Players.LocalPlayer
+
+local Esp = loadstring(game:HttpGet("https://raw.githubusercontent.com/haalfiperth/Elisium/refs/heads/main/Deps/Esp.lua"))()
+-- ESP Default Values (must be after Esp is loaded AND after Sections is created)
 if not Esp.Tracers then
     Esp.Tracers = {Enabled = false, Color = NewRGB(255,255,255), Origin = "Bottom", Thickness = 1}
 end
@@ -17,16 +29,12 @@ end
 if not Esp.PlayerCount then
     Esp.PlayerCount = {Enabled = false, Color = NewRGB(255,255,255), ShowAlive = true, ShowTotal = true, TextSize = 14}
 end
-local Players = game:GetService("Players")
-local CoreGui = game:GetService("CoreGui")
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local MarketplaceService = game:GetService("MarketplaceService")
-local Camera = workspace.CurrentCamera
-local player = Players.LocalPlayer
-
+if not Esp.Radar then
+    Esp.Radar = {Enabled = false, Size = 150, Range = 200, Background = NewRGB(10,10,10), Enemy = NewRGB(255,0,0), Team = NewRGB(0,255,0)}
+end
+if not Esp.StatusIcons then
+    Esp.StatusIcons = {Enabled = false, Knocked = true, Grabbed = true, Reloading = true}
+end
 -- UI parent (fallback for some games)
 local guiParent = player:WaitForChild("PlayerGui")
 pcall(function() guiParent = CoreGui end)
@@ -917,131 +925,138 @@ local silentAimC, silentAimB, silentAimF = createTab("Silent Aim")
 local resolverC, resolverB, resolverF = createTab("Resolver")
 local espC, espB, espF = createTab("ESP")      -- placeholder
 local speedC, speedB, speedF = createTab("Speed") -- placeholder
+
+local Sections = {
+    Visuals = {
+    	PlayerESP = Tabs.Visuals:AddLeftGroupbox("Player ESP"),
+        SelfESP = Tabs.Visuals:AddRightGroupbox("Self ESP"),
+        World = Tabs.Visuals:AddLeftGroupbox("World"),
+        Game = Tabs.Visuals:AddRightGroupbox("Game"),
+        Hud = Tabs.Visuals:AddLeftGroupbox("Hud"),
+        View = Tabs.Visuals:AddRightGroupbox("View")
+    },
+    Misc = {
+        Utilities = Tabs.Misc:AddLeftGroupbox("Utilities"),
+        Other = Tabs.Misc:AddRightGroupbox("Other"),
+        BackgroundNoise = Tabs.Misc:AddLeftGroupbox("Background Noise"),
+        Purchase = Tabs.Misc:AddLeftGroupbox("Purchases"),
+        Players = Tabs.Misc:AddRightGroupbox("Players")
+    },
+    Settings = {
+    	Menu = Tabs.Settings:AddLeftGroupbox("Menu"),
+        Server = Tabs.Settings:AddRightGroupbox("Server")
+    }
+}
 -- ============================================================
--- ADDITIONAL ESP OPTIONS
+-- ESP OPTIONS (Full)
 -- ============================================================
 
 -- Tracers
 Sections.Visuals.PlayerESP:AddToggle("EspTracersEnabled", {Text = "Tracers", Default = false, Callback = function(a)
     Esp.Tracers.Enabled = a
-end}):AddColorPicker("EspTracersColor", {Default = NewRGB(255, 255, 255), Title = "Color", Transparency = nil, Callback = function(a)
+end}):AddColorPicker("EspTracersColor", {Default = NewRGB(255,255,255), Title = "Color", Transparency = nil, Callback = function(a)
     Esp.Tracers.Color = a
 end})
-local Tracers = Sections.Visuals.PlayerESP:AddDependencyBox()
-Tracers:AddDropdown("EspTracersOrigin", {Values = {"Bottom", "Top", "Center"}, Default = "Bottom", Text = "Origin", Callback = function(a)
+local TracersBox = Sections.Visuals.PlayerESP:AddDependencyBox()
+TracersBox:AddDropdown("EspTracersOrigin", {Values = {"Bottom", "Top", "Center"}, Default = "Bottom", Text = "Origin", Callback = function(a)
     Esp.Tracers.Origin = a
 end})
-Tracers:AddSlider("EspTracersThickness", {Text = "Thickness", Default = 1, Min = 0.5, Max = 5, Rounding = 1, Compact = true, Callback = function(a)
+TracersBox:AddSlider("EspTracersThickness", {Text = "Thickness", Default = 1, Min = 0.5, Max = 5, Rounding = 1, Compact = true, Callback = function(a)
     Esp.Tracers.Thickness = a
 end})
-Tracers:SetupDependencies({{Toggles["EspTracersEnabled"], true}})
+TracersBox:SetupDependencies({{Toggles["EspTracersEnabled"], true}})
 
 -- Skeletons
 Sections.Visuals.PlayerESP:AddToggle("EspSkeletonEnabled", {Text = "Skeleton", Default = false, Callback = function(a)
     Esp.Skeleton.Enabled = a
-end}):AddColorPicker("EspSkeletonColor", {Default = NewRGB(255, 255, 255), Title = "Color", Transparency = nil, Callback = function(a)
+end}):AddColorPicker("EspSkeletonColor", {Default = NewRGB(255,255,255), Title = "Color", Transparency = nil, Callback = function(a)
     Esp.Skeleton.Color = a
 end})
-local Skeleton = Sections.Visuals.PlayerESP:AddDependencyBox()
-Skeleton:AddSlider("EspSkeletonThickness", {Text = "Thickness", Default = 1, Min = 0.5, Max = 5, Rounding = 1, Compact = true, Callback = function(a)
+local SkeletonBox = Sections.Visuals.PlayerESP:AddDependencyBox()
+SkeletonBox:AddSlider("EspSkeletonThickness", {Text = "Thickness", Default = 1, Min = 0.5, Max = 5, Rounding = 1, Compact = true, Callback = function(a)
     Esp.Skeleton.Thickness = a
 end})
-Skeleton:SetupDependencies({{Toggles["EspSkeletonEnabled"], true}})
+SkeletonBox:SetupDependencies({{Toggles["EspSkeletonEnabled"], true}})
 
 -- Head Dot
 Sections.Visuals.PlayerESP:AddToggle("EspHeadDotEnabled", {Text = "Head Dot", Default = false, Callback = function(a)
     Esp.HeadDot.Enabled = a
-end}):AddColorPicker("EspHeadDotColor", {Default = NewRGB(255, 0, 0), Title = "Color", Transparency = nil, Callback = function(a)
+end}):AddColorPicker("EspHeadDotColor", {Default = NewRGB(255,0,0), Title = "Color", Transparency = nil, Callback = function(a)
     Esp.HeadDot.Color = a
 end})
-local HeadDot = Sections.Visuals.PlayerESP:AddDependencyBox()
-HeadDot:AddSlider("EspHeadDotSize", {Text = "Size", Default = 5, Min = 1, Max = 15, Rounding = 0, Compact = true, Callback = function(a)
+local HeadDotBox = Sections.Visuals.PlayerESP:AddDependencyBox()
+HeadDotBox:AddSlider("EspHeadDotSize", {Text = "Size", Default = 5, Min = 1, Max = 15, Rounding = 0, Compact = true, Callback = function(a)
     Esp.HeadDot.Size = a
 end})
-HeadDot:SetupDependencies({{Toggles["EspHeadDotEnabled"], true}})
+HeadDotBox:SetupDependencies({{Toggles["EspHeadDotEnabled"], true}})
 
 -- Footsteps
 Sections.Visuals.PlayerESP:AddToggle("EspFootstepsEnabled", {Text = "Footsteps", Default = false, Callback = function(a)
     Esp.Footsteps.Enabled = a
-end}):AddColorPicker("EspFootstepsColor", {Default = NewRGB(255, 255, 0), Title = "Color", Transparency = nil, Callback = function(a)
+end}):AddColorPicker("EspFootstepsColor", {Default = NewRGB(255,255,0), Title = "Color", Transparency = nil, Callback = function(a)
     Esp.Footsteps.Color = a
 end})
-local Footsteps = Sections.Visuals.PlayerESP:AddDependencyBox()
-Footsteps:AddSlider("EspFootstepsLifetime", {Text = "Lifetime", Default = 3, Min = 0.5, Max = 10, Rounding = 1, Suffix = "s", Compact = true, Callback = function(a)
+local FootstepsBox = Sections.Visuals.PlayerESP:AddDependencyBox()
+FootstepsBox:AddSlider("EspFootstepsLifetime", {Text = "Lifetime", Default = 3, Min = 0.5, Max = 10, Rounding = 1, Suffix = "s", Compact = true, Callback = function(a)
     Esp.Footsteps.Lifetime = a
 end})
-Footsteps:SetupDependencies({{Toggles["EspFootstepsEnabled"], true}})
+FootstepsBox:SetupDependencies({{Toggles["EspFootstepsEnabled"], true}})
 
 -- 2D Radar
 Sections.Visuals.PlayerESP:AddToggle("EspRadar2DEnabled", {Text = "2D Radar", Default = false, Callback = function(a)
     Esp.Radar.Enabled = a
 end})
-local Radar2D = Sections.Visuals.PlayerESP:AddDependencyBox()
-Radar2D:AddSlider("EspRadarSize", {Text = "Size", Default = 150, Min = 50, Max = 400, Rounding = 0, Compact = true, Callback = function(a)
+local RadarBox = Sections.Visuals.PlayerESP:AddDependencyBox()
+RadarBox:AddSlider("EspRadarSize", {Text = "Size", Default = 150, Min = 50, Max = 400, Rounding = 0, Compact = true, Callback = function(a)
     Esp.Radar.Size = a
 end})
-Radar2D:AddSlider("EspRadarRange", {Text = "Range", Default = 200, Min = 50, Max = 500, Rounding = 0, Compact = true, Callback = function(a)
+RadarBox:AddSlider("EspRadarRange", {Text = "Range", Default = 200, Min = 50, Max = 500, Rounding = 0, Compact = true, Callback = function(a)
     Esp.Radar.Range = a
 end})
-Radar2D:AddColorPicker("EspRadarBackground", {Default = NewRGB(10, 10, 10), Title = "Background", Transparency = nil, Callback = function(a)
+RadarBox:AddColorPicker("EspRadarBackground", {Default = NewRGB(10,10,10), Title = "Background", Transparency = nil, Callback = function(a)
     Esp.Radar.Background = a
 end})
-Radar2D:AddColorPicker("EspRadarEnemy", {Default = NewRGB(255, 0, 0), Title = "Enemy Color", Transparency = nil, Callback = function(a)
+RadarBox:AddColorPicker("EspRadarEnemy", {Default = NewRGB(255,0,0), Title = "Enemy Color", Transparency = nil, Callback = function(a)
     Esp.Radar.Enemy = a
 end})
-Radar2D:AddColorPicker("EspRadarTeam", {Default = NewRGB(0, 255, 0), Title = "Team Color", Transparency = nil, Callback = function(a)
+RadarBox:AddColorPicker("EspRadarTeam", {Default = NewRGB(0,255,0), Title = "Team Color", Transparency = nil, Callback = function(a)
     Esp.Radar.Team = a
 end})
-Radar2D:SetupDependencies({{Toggles["EspRadar2DEnabled"], true}})
+RadarBox:SetupDependencies({{Toggles["EspRadar2DEnabled"], true}})
 
--- Status Icons (knocked, grabbed, etc.)
-Sections.Visuals.PlayerESP:AddToggle("EspStatusIconsEnabled", {Text = "Status Icons", Default = false, Callback = function(a)
-    Esp.StatusIcons.Enabled = a
-end})
-local StatusIcons = Sections.Visuals.PlayerESP:AddDependencyBox()
-StatusIcons:AddToggle("EspStatusKnocked", {Text = "Show Knocked", Default = true, Callback = function(a)
-    Esp.StatusIcons.Knocked = a
-end})
-StatusIcons:AddToggle("EspStatusGrabbed", {Text = "Show Grabbed", Default = true, Callback = function(a)
-    Esp.StatusIcons.Grabbed = a
-end})
-StatusIcons:AddToggle("EspStatusReloading", {Text = "Show Reloading", Default = true, Callback = function(a)
-    Esp.StatusIcons.Reloading = a
-end})
-StatusIcons:SetupDependencies({{Toggles["EspStatusIconsEnabled"], true}})
-
--- Arrow Indicator (points to off-screen enemies)
+-- Arrow Indicator
 Sections.Visuals.PlayerESP:AddToggle("EspArrowIndicatorEnabled", {Text = "Arrow Indicator", Default = false, Callback = function(a)
     Esp.Arrow.Enabled = a
-end}):AddColorPicker("EspArrowColor", {Default = NewRGB(255, 0, 0), Title = "Color", Transparency = nil, Callback = function(a)
+end}):AddColorPicker("EspArrowColor", {Default = NewRGB(255,0,0), Title = "Color", Transparency = nil, Callback = function(a)
     Esp.Arrow.Color = a
 end})
-local Arrow = Sections.Visuals.PlayerESP:AddDependencyBox()
-Arrow:AddSlider("EspArrowSize", {Text = "Size", Default = 20, Min = 10, Max = 50, Rounding = 0, Compact = true, Callback = function(a)
+local ArrowBox = Sections.Visuals.PlayerESP:AddDependencyBox()
+ArrowBox:AddSlider("EspArrowSize", {Text = "Size", Default = 20, Min = 10, Max = 50, Rounding = 0, Compact = true, Callback = function(a)
     Esp.Arrow.Size = a
 end})
-Arrow:AddSlider("EspArrowDistance", {Text = "Distance from Edge", Default = 50, Min = 10, Max = 200, Rounding = 0, Compact = true, Callback = function(a)
+ArrowBox:AddSlider("EspArrowDistance", {Text = "Distance from Edge", Default = 50, Min = 10, Max = 200, Rounding = 0, Compact = true, Callback = function(a)
     Esp.Arrow.Distance = a
 end})
-Arrow:SetupDependencies({{Toggles["EspArrowIndicatorEnabled"], true}})
+ArrowBox:SetupDependencies({{Toggles["EspArrowIndicatorEnabled"], true}})
 
 -- Player Count
 Sections.Visuals.PlayerESP:AddToggle("EspPlayerCountEnabled", {Text = "Player Count", Default = false, Callback = function(a)
     Esp.PlayerCount.Enabled = a
-end}):AddColorPicker("EspPlayerCountColor", {Default = NewRGB(255, 255, 255), Title = "Color", Transparency = nil, Callback = function(a)
+end}):AddColorPicker("EspPlayerCountColor", {Default = NewRGB(255,255,255), Title = "Color", Transparency = nil, Callback = function(a)
     Esp.PlayerCount.Color = a
 end})
-local PlayerCount = Sections.Visuals.PlayerESP:AddDependencyBox()
-PlayerCount:AddToggle("EspPlayerCountShowAlive", {Text = "Show Alive Count", Default = true, Callback = function(a)
+local PlayerCountBox = Sections.Visuals.PlayerESP:AddDependencyBox()
+PlayerCountBox:AddToggle("EspPlayerCountShowAlive", {Text = "Show Alive Count", Default = true, Callback = function(a)
     Esp.PlayerCount.ShowAlive = a
 end})
-PlayerCount:AddToggle("EspPlayerCountShowTotal", {Text = "Show Total Count", Default = true, Callback = function(a)
+PlayerCountBox:AddToggle("EspPlayerCountShowTotal", {Text = "Show Total Count", Default = true, Callback = function(a)
     Esp.PlayerCount.ShowTotal = a
 end})
-PlayerCount:AddSlider("EspPlayerCountTextSize", {Text = "Text Size", Default = 14, Min = 8, Max = 30, Rounding = 0, Compact = true, Callback = function(a)
+PlayerCountBox:AddSlider("EspPlayerCountTextSize", {Text = "Text Size", Default = 14, Min = 8, Max = 30, Rounding = 0, Compact = true, Callback = function(a)
     Esp.PlayerCount.TextSize = a
 end})
-PlayerCount:SetupDependencies({{Toggles["EspPlayerCountEnabled"], true}})
+PlayerCountBox:SetupDependencies({{Toggles["EspPlayerCountEnabled"], true}})
+
 -- Silent Aim Tab
 createToggle(silentAimC, "Enable Silent Aim", function(s)
     SilentAim.Enabled = s
@@ -1159,11 +1174,7 @@ RunService.RenderStepped:Connect(function()
         FOVCircle.Position = UserInputService:GetMouseLocation()
     end
 end)
--- ============================================================
--- ESP LOGIC EXTENSIONS
--- ============================================================
 
--- Tracers
 do
     local TracerLines = {}
     local function UpdateTracers()
